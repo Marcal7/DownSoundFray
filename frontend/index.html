@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Downfy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main class="glass-container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-music"></i>
+                <h1>DownSoundFray</h1>
+            </div>
+            <p>Baixe suas músicas do Spotify e SoundCloud com qualidade.</p>
+        </header>
+
+        <section class="input-section">
+            <div class="input-wrapper">
+                <i class="fa-solid fa-link input-icon"></i>
+                <input type="text" id="urlInput" placeholder="Cole a URL da música ou playlist aqui...">
+                <button id="downloadBtn" class="primary-btn">
+                    <i class="fa-solid fa-arrow-down"></i> Baixar
+                </button>
+            </div>
+
+            <div class="folder-selection">
+                <div class="folder-info">
+                    <i class="fa-regular fa-folder-open"></i>
+                    <span id="currentFolder">Selecionando pasta padrão...</span>
+                </div>
+                <button id="selectFolderBtn" class="secondary-btn">Alterar Destino</button>
+            </div>
+        </section>
+
+        <section class="downloads-section">
+            <div class="downloads-header">
+                <h2>Downloads Ativos</h2>
+                <span class="badge" id="downloadCount">0</span>
+            </div>
+            <div class="downloads-list" id="downloadsList">
+                <div class="empty-state" id="emptyState">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <p>Nenhum download no momento</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
