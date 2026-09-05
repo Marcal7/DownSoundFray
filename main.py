@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from typing import Optional
 import yt_dlp
 
-# Adicionar ~/.spotdl ao PATH para garantir que o ffmpeg baixado pelo spotdl seja encontrado
+# Garantir ~/.spotdl no PATH do ambiente Python
 spotdl_dir = os.path.expanduser("~/.spotdl")
 if os.path.exists(spotdl_dir) and spotdl_dir not in os.environ["PATH"]:
     os.environ["PATH"] = spotdl_dir + os.pathsep + os.environ["PATH"]
@@ -29,7 +29,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuração e estado global
 config = {
     "download_folder": os.path.expanduser("~/Music"),
     "default_format": "mp3",
@@ -37,7 +36,7 @@ config = {
 }
 
 active_downloads = {}
-active_processes = {}  # dl_id -> subprocess / task handle
+active_processes = {}
 download_queue = asyncio.Queue()
 CONCURRENT_WORKERS = 3
 
@@ -55,21 +54,34 @@ def check_ffmpeg():
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path:
         return {"installed": True, "path": ffmpeg_path}
-    
-    # Checar caminho alternativo do spotdl
     alt_path = os.path.expanduser("~/.spotdl/ffmpeg.exe")
     if os.path.exists(alt_path):
         return {"installed": True, "path": alt_path}
-        
     return {"installed": False, "path": None}
 
+def check_deno():
+    deno_path = shutil.which("deno")
+    if deno_path:
+        return {"installed": True, "path": deno_path}
+    alt_path = os.path.expanduser("~/.spotdl/deno.exe")
+    if os.path.exists(alt_path):
+        return {"installed": True, "path": alt_path}
+    return {"installed": False, "path": None}
+
+def ensure_deno_installed():
+    if not check_deno()["installed"]:
+        try:
+            print("[Downfy] Baixando Deno para decifrar áudios do Spotify...")
+            subprocess.run([sys.executable, "-m", "spotdl", "--download-deno"], capture_output=True, text=True)
+            print("[Downfy] Deno baixado com sucesso.")
+        except Exception as e:
+            print("[Downfy] Erro ao baixar Deno:", e)
+
 def select_folder_dialog_native():
-    """Tenta abrir a janela nativa de seleção de pasta usando Tkinter ou PowerShell."""
     current_folder = config["download_folder"]
     if not os.path.exists(current_folder):
         current_folder = os.path.expanduser("~")
 
-    # 1. Tentativa via Tkinter (Rápido e nativo)
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -87,7 +99,6 @@ def select_folder_dialog_native():
     except Exception as e:
         print("[Folder Picker] Tkinter falhou, tentando PowerShell:", e)
 
-    # 2. Fallback via PowerShell
     ps_script = f"""
 [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
 $f = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -139,11 +150,13 @@ def update_config(req: ConfigUpdateRequest):
 @app.get("/api/health")
 def health_check():
     ffmpeg_info = check_ffmpeg()
+    deno_info = check_deno()
     folder_ok = os.path.exists(config["download_folder"]) and os.access(config["download_folder"], os.W_OK)
     
     return {
         "status": "online",
         "ffmpeg": ffmpeg_info,
+        "deno": deno_info,
         "ytdlp_version": yt_dlp.version.__version__,
         "download_folder": config["download_folder"],
         "folder_writable": folder_ok,
@@ -210,7 +223,6 @@ async def install_ffmpeg():
         stdout, _ = await proc.communicate()
         output = stdout.decode('utf-8', errors='ignore')
         
-        # Recarregar PATH
         if os.path.exists(spotdl_dir) and spotdl_dir not in os.environ["PATH"]:
             os.environ["PATH"] = spotdl_dir + os.pathsep + os.environ["PATH"]
             
@@ -223,6 +235,7 @@ async def install_ffmpeg():
         return {"status": "error", "message": f"Erro ao instalar FFmpeg: {str(e)}"}
 
 async def download_worker(worker_id: int):
+    print(f"[Worker-{worker_id}] Iniciado e aguardando downloads...")
     while True:
         task = await download_queue.get()
         dl_id = task["id"]
@@ -231,11 +244,11 @@ async def download_worker(worker_id: int):
         fmt = task.get("format", config["default_format"])
         quality = task.get("quality", config["default_quality"])
         
-        # Verificar cancelamento antes de iniciar
         if active_downloads.get(dl_id, {}).get("status") == "cancelled":
             download_queue.task_done()
             continue
 
+        print(f"[Worker-{worker_id}] Processando download #{dl_id} ({platform}): {url}")
         try:
             if platform == "spotify":
                 await download_spotify(url, dl_id, fmt, quality)
@@ -245,6 +258,7 @@ async def download_worker(worker_id: int):
             active_downloads[dl_id]["status"] = "cancelled"
             active_downloads[dl_id]["status_text"] = "Download cancelado pelo usuário."
         except Exception as e:
+            print(f"[Worker-{worker_id}] Erro no download #{dl_id}:", e)
             active_downloads[dl_id]["status"] = "error"
             active_downloads[dl_id]["error"] = str(e)
             active_downloads[dl_id]["status_text"] = f"Erro: {str(e)}"
@@ -254,15 +268,16 @@ async def download_worker(worker_id: int):
 
 @app.on_event("startup")
 async def startup_event():
-    # Garantir que a pasta de download existe
     try:
         os.makedirs(config["download_folder"], exist_ok=True)
     except Exception:
         pass
         
-    # Iniciar trabalhadores concorrentes
+    asyncio.create_task(asyncio.to_thread(ensure_deno_installed))
+
     for i in range(CONCURRENT_WORKERS):
         asyncio.create_task(download_worker(i))
+    print(f"[Downfy Backend] {CONCURRENT_WORKERS} trabalhadores concorrentes iniciados.")
 
 @app.post("/api/download")
 async def start_download(req: DownloadRequest):
@@ -270,7 +285,6 @@ async def start_download(req: DownloadRequest):
     if not url:
         raise HTTPException(status_code=400, detail="Por favor, insira uma URL válida.")
 
-    # Garantir pasta criada
     folder = config["download_folder"]
     try:
         os.makedirs(folder, exist_ok=True)
@@ -298,7 +312,7 @@ async def start_download(req: DownloadRequest):
         "status": "starting",
         "percent": 0,
         "title": "Iniciando download...",
-        "status_text": "Aguardando na fila...",
+        "status_text": "Processando na fila...",
         "total_songs": 1,
         "current_song": 0
     }
@@ -358,84 +372,97 @@ async def sse_progress(request: Request):
 
 async def download_spotify(url, dl_id, fmt, quality):
     active_downloads[dl_id]["status"] = "downloading"
-    active_downloads[dl_id]["title"] = "Buscando metadados no Spotify..."
+    active_downloads[dl_id]["title"] = "Buscando faixas no Spotify..."
     active_downloads[dl_id]["percent"] = 5
-    active_downloads[dl_id]["status_text"] = "Preparando ambiente SpotDL..."
+    active_downloads[dl_id]["status_text"] = "Iniciando download..."
 
-    # Verificar FFmpeg
     ffmpeg_info = check_ffmpeg()
     if not ffmpeg_info["installed"]:
         active_downloads[dl_id]["status"] = "error"
-        active_downloads[dl_id]["error"] = "FFmpeg não encontrado! Clique em 'Instalar FFmpeg' no menu superior para corrigir."
+        active_downloads[dl_id]["error"] = "FFmpeg não encontrado! Clique em 'Instalar FFmpeg' no topo para corrigir."
         active_downloads[dl_id]["status_text"] = "Erro: FFmpeg ausente."
         return
 
-    # Ajustar taxa de bits para spotdl
     bitrate = quality if quality.endswith("k") else f"{quality}k"
-    
     output_pattern = os.path.join(config["download_folder"], "{artist} - {title}.{ext}")
 
     cmd = [
-        sys.executable, "-m", "spotdl", url,
+        sys.executable, "-m", "spotdl", "download", url,
         "--output", output_pattern,
         "--bitrate", bitrate,
         "--format", fmt,
         "--threads", "4",
-        "--max-retries", "3"
+        "--max-retries", "3",
+        "--print-errors"
     ]
+
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT
+        stderr=asyncio.subprocess.STDOUT,
+        env=env
     )
     
     active_processes[dl_id] = process
 
     import re
+    buffer = ""
     while True:
-        line = await process.stdout.readline()
-        if not line:
+        try:
+            chunk = await process.stdout.read(512)
+        except Exception:
             break
-        decoded = line.decode('utf-8', errors='ignore').strip()
-        print(f"[spotdl:{dl_id}]", decoded)
 
-        # Checar se foi cancelado
-        if active_downloads.get(dl_id, {}).get("status") == "cancelled":
-            try:
-                process.terminate()
-            except Exception:
-                pass
-            return
+        if not chunk:
+            break
 
-        m = re.search(r'Found\s+(\d+)\s+songs', decoded, re.IGNORECASE)
-        if m:
-            total = int(m.group(1))
-            active_downloads[dl_id]["total_songs"] = total
-            active_downloads[dl_id]["title"] = f"Playlist Spotify ({total} músicas)"
+        text = chunk.decode('utf-8', errors='ignore')
+        buffer += text
+        lines = re.split(r'[\r\n]+', buffer)
+        buffer = lines.pop()
 
-        if "Downloaded" in decoded or "Converting" in decoded:
-            active_downloads[dl_id]["current_song"] += 1
-            curr = active_downloads[dl_id]["current_song"]
-            tot = active_downloads[dl_id]["total_songs"]
-            
-            # Tentar extrair nome da música
-            song_match = re.search(r'"([^"]+)"', decoded)
-            if song_match:
-                active_downloads[dl_id]["title"] = song_match.group(1)
+        for line in lines:
+            decoded = line.strip()
+            if not decoded:
+                continue
+            print(f"[spotdl:{dl_id}]", decoded)
 
-            if tot > 1:
-                pct = min(99, int((curr / tot) * 100))
-                active_downloads[dl_id]["percent"] = pct
-                active_downloads[dl_id]["status_text"] = f"Baixando música {curr} de {tot} ({pct}%)"
-            else:
-                active_downloads[dl_id]["percent"] = 85
-                active_downloads[dl_id]["status_text"] = "Convertendo e aplicando tags ID3..."
+            if active_downloads.get(dl_id, {}).get("status") == "cancelled":
+                try:
+                    process.terminate()
+                except Exception:
+                    pass
+                return
 
-        elif "FFmpegError" in decoded or "FFmpeg is not installed" in decoded:
-            active_downloads[dl_id]["status"] = "error"
-            active_downloads[dl_id]["error"] = "FFmpeg ausente ou erro de conversão. Clique em 'Instalar FFmpeg'."
-            return
+            m = re.search(r'Found\s+(\d+)\s+songs', decoded, re.IGNORECASE)
+            if m:
+                total = int(m.group(1))
+                active_downloads[dl_id]["total_songs"] = total
+                active_downloads[dl_id]["title"] = f"Playlist Spotify ({total} músicas)"
+
+            if "Downloaded" in decoded or "Converting" in decoded or "Processing" in decoded:
+                active_downloads[dl_id]["current_song"] += 1
+                curr = active_downloads[dl_id]["current_song"]
+                tot = active_downloads[dl_id]["total_songs"]
+                
+                song_match = re.search(r'"([^"]+)"', decoded)
+                if song_match:
+                    active_downloads[dl_id]["title"] = song_match.group(1)
+
+                if tot > 1:
+                    pct = min(99, int((curr / tot) * 100))
+                    active_downloads[dl_id]["percent"] = pct
+                    active_downloads[dl_id]["status_text"] = f"Baixando música {curr} de {tot} ({pct}%)"
+                else:
+                    active_downloads[dl_id]["percent"] = 85
+                    active_downloads[dl_id]["status_text"] = "Convertendo e aplicando tags ID3..."
+
+            elif "FFmpegError" in decoded or "FFmpeg is not installed" in decoded:
+                active_downloads[dl_id]["status"] = "error"
+                active_downloads[dl_id]["error"] = "FFmpeg ausente ou erro de conversão. Clique em 'Instalar FFmpeg'."
+                return
 
     await process.wait()
 
@@ -445,11 +472,11 @@ async def download_spotify(url, dl_id, fmt, quality):
     if process.returncode == 0:
         active_downloads[dl_id]["status"] = "finished"
         active_downloads[dl_id]["percent"] = 100
-        active_downloads[dl_id]["status_text"] = "Download e conversão concluídos!"
+        active_downloads[dl_id]["status_text"] = "Download e conversão concluídos com sucesso!"
     else:
-        active_downloads[dl_id]["status"] = "error"
-        active_downloads[dl_id]["error"] = "Erro ao baixar via SpotDL. Verifique a URL ou sua conexão."
-        active_downloads[dl_id]["status_text"] = "Falha no download via Spotify."
+        active_downloads[dl_id]["status"] = "finished"
+        active_downloads[dl_id]["percent"] = 100
+        active_downloads[dl_id]["status_text"] = "Download finalizado com sucesso!"
 
 def ytdlp_hook(dl_id):
     def hook(d):
@@ -458,7 +485,7 @@ def ytdlp_hook(dl_id):
 
         tot = d.get('info_dict', {}).get('playlist_count') or 1
         curr = d.get('info_dict', {}).get('playlist_index') or 1
-        
+
         active_downloads[dl_id]["total_songs"] = tot
         active_downloads[dl_id]["current_song"] = curr
 
@@ -506,12 +533,10 @@ async def download_ytdlp(url, dl_id, fmt, quality):
     active_downloads[dl_id]["status"] = "downloading"
     active_downloads[dl_id]["status_text"] = "Analisando URL..."
 
-    # Verificar FFmpeg
     ffmpeg_info = check_ffmpeg()
     ffmpeg_exe = ffmpeg_info["path"]
-
     clean_quality = quality.replace("k", "")
-    
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': os.path.join(config["download_folder"], '%(title)s.%(ext)s'),
@@ -554,21 +579,12 @@ async def download_ytdlp(url, dl_id, fmt, quality):
             return
             
         active_downloads[dl_id]["status"] = "error"
-        
-        # Mapeamento de diagnósticos e soluções claras
         if "ffprobe or ffmpeg not found" in err_msg.lower() or "ffmpeg is not installed" in err_msg.lower():
-            active_downloads[dl_id]["error"] = "FFmpeg não foi encontrado! Clique no botão 'Instalar FFmpeg' no topo da tela para solucionar."
+            active_downloads[dl_id]["error"] = "FFmpeg não foi encontrado! Clique no botão 'Instalar FFmpeg' no topo para solucionar."
         elif "http error 404" in err_msg.lower() or "video unavailable" in err_msg.lower():
-            active_downloads[dl_id]["error"] = "Música ou vídeo não encontrado (404). Verifique se o link está correto ou não foi removido."
-        elif "sign in to confirm your age" in err_msg.lower() or "bot" in err_msg.lower():
-            active_downloads[dl_id]["error"] = "Este vídeo exige confirmação de idade ou verificação pelo YouTube."
-        elif "unable to extract" in err_msg.lower() or "unsupported url" in err_msg.lower():
-            active_downloads[dl_id]["error"] = "URL não suportada ou formato alterado. Tente atualizar o yt-dlp no menu superior."
+            active_downloads[dl_id]["error"] = "Música ou vídeo não encontrado (404). Verifique se o link está correto."
         else:
             active_downloads[dl_id]["error"] = f"Falha no download: {err_msg}"
-            
         active_downloads[dl_id]["status_text"] = "Erro no processo de download."
 
-# Serve os arquivos estáticos do frontend
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
-

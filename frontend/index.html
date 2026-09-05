@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
@@ -25,12 +25,13 @@
     <!-- Modal de Edição Manual de Pasta -->
     <div class="modal-overlay" id="folderModal">
         <div class="modal-content glass-card">
-            <h3><i class="fa-solid fa-folder-pen"></i> Definir Pasta de Destino</h3>
+            <h3><i class="fa-solid fa-folder-open"></i> Definir Pasta de Destino</h3>
             <p>Digite ou cole o caminho completo da pasta onde suas músicas serão salvas:</p>
-            <input type="text" id="manualFolderPath" class="modal-input" placeholder="C:\Músicas ou ~/Music">
+            <input type="text" id="manualFolderPath" class="modal-input"
+                placeholder="C:\Músicas ou C:\Users\SeuUsuario\Music">
             <div class="modal-actions">
-                <button id="cancelFolderModalBtn" class="secondary-btn">Cancelar</button>
-                <button id="saveFolderModalBtn" class="primary-btn-sm">Salvar Pasta</button>
+                <button id="cancelFolderModalBtn" class="btn secondary-btn">Cancelar</button>
+                <button id="saveFolderModalBtn" class="btn primary-btn-sm">Salvar Pasta</button>
             </div>
         </div>
     </div>
@@ -47,10 +48,12 @@
                 </span>
             </div>
             <div class="system-tools">
-                <button id="installFfmpegBtn" class="tool-btn danger" style="display: none;" title="Baixar FFmpeg automaticamente">
+                <button id="installFfmpegBtn" class="btn tool-btn danger" style="display: none;"
+                    title="Baixar FFmpeg automaticamente">
                     <i class="fa-solid fa-download"></i> Instalar FFmpeg
                 </button>
-                <button id="updateYtdlpBtn" class="tool-btn" title="Atualizar yt-dlp para corrigir erros de download">
+                <button id="updateYtdlpBtn" class="btn tool-btn"
+                    title="Atualizar yt-dlp para corrigir erros de download">
                     <i class="fa-solid fa-rotate"></i> Atualizar yt-dlp
                 </button>
             </div>
@@ -67,8 +70,9 @@
         <section class="input-section">
             <div class="input-wrapper">
                 <i class="fa-solid fa-link input-icon"></i>
-                <input type="text" id="urlInput" placeholder="Cole a URL da música ou playlist do Spotify, YouTube ou SoundCloud...">
-                <button id="downloadBtn" class="primary-btn">
+                <input type="text" id="urlInput"
+                    placeholder="Cole a URL da música ou playlist do Spotify, YouTube ou SoundCloud...">
+                <button id="downloadBtn" class="btn primary-btn">
                     <i class="fa-solid fa-arrow-down"></i> Baixar
                 </button>
             </div>
@@ -76,24 +80,30 @@
             <!-- Seletores de Formato e Qualidade -->
             <div class="options-bar">
                 <div class="option-group">
-                    <label for="formatSelect"><i class="fa-solid fa-file-audio"></i> Formato:</label>
-                    <select id="formatSelect" class="custom-select">
-                        <option value="mp3" selected>MP3 (.mp3)</option>
-                        <option value="m4a">M4A / AAC (.m4a)</option>
-                        <option value="flac">FLAC (Lossless .flac)</option>
-                        <option value="wav">WAV (Sem Compressão .wav)</option>
-                        <option value="opus">OPUS (.opus)</option>
-                    </select>
+                    <label for="formatSelect"><i class="fa-solid fa-file-audio"></i> Formato</label>
+                    <div class="select-wrapper">
+                        <select id="formatSelect" class="custom-select">
+                            <option value="mp3" selected>MP3 (.mp3)</option>
+                            <option value="m4a">M4A / AAC (.m4a)</option>
+                            <option value="flac">FLAC (Lossless .flac)</option>
+                            <option value="wav">WAV (Sem Compressão .wav)</option>
+                            <option value="opus">OPUS (.opus)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-icon"></i>
+                    </div>
                 </div>
 
                 <div class="option-group">
-                    <label for="qualitySelect"><i class="fa-solid fa-sliders"></i> Qualidade:</label>
-                    <select id="qualitySelect" class="custom-select">
-                        <option value="320k" selected>320 kbps (Alta Qualidade)</option>
-                        <option value="256k">256 kbps (Média)</option>
-                        <option value="192k">192 kbps (Normal)</option>
-                        <option value="128k">128 kbps (Econômica)</option>
-                    </select>
+                    <label for="qualitySelect"><i class="fa-solid fa-sliders"></i> Qualidade</label>
+                    <div class="select-wrapper">
+                        <select id="qualitySelect" class="custom-select">
+                            <option value="320k" selected>320 kbps (Alta Qualidade)</option>
+                            <option value="256k">256 kbps (Média)</option>
+                            <option value="192k">192 kbps (Normal)</option>
+                            <option value="128k">128 kbps (Econômica)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-icon"></i>
+                    </div>
                 </div>
             </div>
 
@@ -104,14 +114,15 @@
                     <span id="currentFolder" title="Caminho atual de download">Selecionando pasta padrão...</span>
                 </div>
                 <div class="folder-buttons">
-                    <button id="selectFolderBtn" class="secondary-btn" title="Escolher pasta via diálogo nativo">
+                    <button id="selectFolderBtn" class="btn secondary-btn" title="Escolher pasta via diálogo nativo">
                         <i class="fa-solid fa-folder-tree"></i> Alterar Destino
                     </button>
-                    <button id="editFolderBtn" class="icon-btn" title="Digitar caminho manualmente">
+                    <button id="editFolderBtn" class="btn icon-btn" title="Digitar caminho manualmente">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button id="openFolderBtn" class="icon-btn highlight" title="Abrir pasta de downloads no Explorer">
-                        <i class="fa-solid fa-folder-show"></i>
+                    <button id="openFolderBtn" class="btn icon-btn highlight"
+                        title="Abrir pasta de downloads no Explorer">
+                        <i class="fa-solid fa-folder-open"></i>
                     </button>
                 </div>
             </div>
@@ -124,11 +135,12 @@
                     <span class="badge" id="downloadCount">0</span>
                 </div>
                 <div class="downloads-header-actions">
-                    <button id="openFolderHeaderBtn" class="action-link" title="Abrir pasta no Windows Explorer">
+                    <button id="openFolderHeaderBtn" class="btn action-link" title="Abrir pasta no Windows Explorer">
                         <i class="fa-regular fa-folder-open"></i> Abrir Pasta
                     </button>
-                    <button id="clearFinishedBtn" class="action-link text-muted" title="Limpar downloads concluídos da lista">
-                        <i class="fa-solid fa-broom"></i> Limpar Concluídos
+                    <button id="clearFinishedBtn" class="btn action-link text-muted"
+                        title="Limpar downloads concluídos da lista">
+                        <i class="fa-solid fa-trash-can"></i> Limpar Concluídos
                     </button>
                 </div>
             </div>
