@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Downfy</title>
+    <title>Downfy - Download de Músicas em Alta Qualidade</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -19,42 +19,124 @@
         <div class="blob blob-3"></div>
     </div>
 
+    <!-- Sistema de Notificações Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Modal de Edição Manual de Pasta -->
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal-content glass-card">
+            <h3><i class="fa-solid fa-folder-pen"></i> Definir Pasta de Destino</h3>
+            <p>Digite ou cole o caminho completo da pasta onde suas músicas serão salvas:</p>
+            <input type="text" id="manualFolderPath" class="modal-input" placeholder="C:\Músicas ou ~/Music">
+            <div class="modal-actions">
+                <button id="cancelFolderModalBtn" class="secondary-btn">Cancelar</button>
+                <button id="saveFolderModalBtn" class="primary-btn-sm">Salvar Pasta</button>
+            </div>
+        </div>
+    </div>
+
     <main class="glass-container">
+        <!-- Barra de Status e Ferramentas do Sistema -->
+        <div class="system-status-bar">
+            <div class="status-indicators">
+                <span class="status-pill" id="ffmpegStatus">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Verificando FFmpeg...
+                </span>
+                <span class="status-pill info" id="ytdlpStatus">
+                    <i class="fa-solid fa-code-branch"></i> yt-dlp v--
+                </span>
+            </div>
+            <div class="system-tools">
+                <button id="installFfmpegBtn" class="tool-btn danger" style="display: none;" title="Baixar FFmpeg automaticamente">
+                    <i class="fa-solid fa-download"></i> Instalar FFmpeg
+                </button>
+                <button id="updateYtdlpBtn" class="tool-btn" title="Atualizar yt-dlp para corrigir erros de download">
+                    <i class="fa-solid fa-rotate"></i> Atualizar yt-dlp
+                </button>
+            </div>
+        </div>
+
         <header>
             <div class="logo">
                 <i class="fa-solid fa-music"></i>
-                <h1>DownSoundFray</h1>
+                <h1>Downfy</h1>
             </div>
-            <p>Baixe suas músicas do Spotify e SoundCloud com qualidade.</p>
+            <p>Baixe suas músicas do Spotify, YouTube e SoundCloud com facilidade e máxima qualidade.</p>
         </header>
 
         <section class="input-section">
             <div class="input-wrapper">
                 <i class="fa-solid fa-link input-icon"></i>
-                <input type="text" id="urlInput" placeholder="Cole a URL da música ou playlist aqui...">
+                <input type="text" id="urlInput" placeholder="Cole a URL da música ou playlist do Spotify, YouTube ou SoundCloud...">
                 <button id="downloadBtn" class="primary-btn">
                     <i class="fa-solid fa-arrow-down"></i> Baixar
                 </button>
             </div>
 
+            <!-- Seletores de Formato e Qualidade -->
+            <div class="options-bar">
+                <div class="option-group">
+                    <label for="formatSelect"><i class="fa-solid fa-file-audio"></i> Formato:</label>
+                    <select id="formatSelect" class="custom-select">
+                        <option value="mp3" selected>MP3 (.mp3)</option>
+                        <option value="m4a">M4A / AAC (.m4a)</option>
+                        <option value="flac">FLAC (Lossless .flac)</option>
+                        <option value="wav">WAV (Sem Compressão .wav)</option>
+                        <option value="opus">OPUS (.opus)</option>
+                    </select>
+                </div>
+
+                <div class="option-group">
+                    <label for="qualitySelect"><i class="fa-solid fa-sliders"></i> Qualidade:</label>
+                    <select id="qualitySelect" class="custom-select">
+                        <option value="320k" selected>320 kbps (Alta Qualidade)</option>
+                        <option value="256k">256 kbps (Média)</option>
+                        <option value="192k">192 kbps (Normal)</option>
+                        <option value="128k">128 kbps (Econômica)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Seleção e Ações de Pasta -->
             <div class="folder-selection">
                 <div class="folder-info">
                     <i class="fa-regular fa-folder-open"></i>
-                    <span id="currentFolder">Selecionando pasta padrão...</span>
+                    <span id="currentFolder" title="Caminho atual de download">Selecionando pasta padrão...</span>
                 </div>
-                <button id="selectFolderBtn" class="secondary-btn">Alterar Destino</button>
+                <div class="folder-buttons">
+                    <button id="selectFolderBtn" class="secondary-btn" title="Escolher pasta via diálogo nativo">
+                        <i class="fa-solid fa-folder-tree"></i> Alterar Destino
+                    </button>
+                    <button id="editFolderBtn" class="icon-btn" title="Digitar caminho manualmente">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button id="openFolderBtn" class="icon-btn highlight" title="Abrir pasta de downloads no Explorer">
+                        <i class="fa-solid fa-folder-show"></i>
+                    </button>
+                </div>
             </div>
         </section>
 
         <section class="downloads-section">
             <div class="downloads-header">
-                <h2>Downloads Ativos</h2>
-                <span class="badge" id="downloadCount">0</span>
+                <div class="downloads-header-title">
+                    <h2>Downloads</h2>
+                    <span class="badge" id="downloadCount">0</span>
+                </div>
+                <div class="downloads-header-actions">
+                    <button id="openFolderHeaderBtn" class="action-link" title="Abrir pasta no Windows Explorer">
+                        <i class="fa-regular fa-folder-open"></i> Abrir Pasta
+                    </button>
+                    <button id="clearFinishedBtn" class="action-link text-muted" title="Limpar downloads concluídos da lista">
+                        <i class="fa-solid fa-broom"></i> Limpar Concluídos
+                    </button>
+                </div>
             </div>
             <div class="downloads-list" id="downloadsList">
                 <div class="empty-state" id="emptyState">
                     <i class="fa-solid fa-cloud-arrow-down"></i>
-                    <p>Nenhum download no momento</p>
+                    <p>Nenhum download em andamento</p>
+                    <span class="empty-subtext">Cole um link acima para iniciar sua coleção de músicas.</span>
                 </div>
             </div>
         </section>
