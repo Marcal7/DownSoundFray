@@ -1,9 +1,50 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 *.pyd
 .Python
+
+# C extensions
+*.so
+
+# Distribution / packaging / builds
+build/
+dist/
+Downfy_Portatil/
+Downfy_Portatil.zip
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Executables & Binaries
+*.exe
+ffmpeg.exe
+ffprobe.exe
+deno.exe
+bin/
+
+# Downloads & app runtime output
 downloads/
 *.log
+config.json
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Editor & OS files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

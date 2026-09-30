@@ -4,6 +4,7 @@ import json
 import shutil
 import asyncio
 import subprocess
+import multiprocessing
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -14,10 +15,28 @@ from pydantic import BaseModel
 from typing import Optional
 import yt_dlp
 
-# Garantir ~/.spotdl no PATH do ambiente Python
+multiprocessing.freeze_support()
+
+# Dispatcher interno para comandos do spotdl no executável compilado
+if len(sys.argv) > 1 and sys.argv[1] == "__spotdl_cli__":
+    sys.argv.pop(1)
+    from spotdl.__main__ import console_entry_point
+    console_entry_point()
+    sys.exit(0)
+
+# Resolução de diretórios (modo normal vs modo congelado PyInstaller)
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+    BASE_DIR = getattr(sys, '_MEIPASS', APP_DIR)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    APP_DIR = BASE_DIR
+
+# Priorizar binários locais (ao lado do exe ou em bin/) e ~/.spotdl no PATH
 spotdl_dir = os.path.expanduser("~/.spotdl")
-if os.path.exists(spotdl_dir) and spotdl_dir not in os.environ["PATH"]:
-    os.environ["PATH"] = spotdl_dir + os.pathsep + os.environ["PATH"]
+for p in [APP_DIR, os.path.join(APP_DIR, "bin"), spotdl_dir]:
+    if os.path.exists(p) and p not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
 
 app = FastAPI(title="Downfy API", version="2.0.0")
 
@@ -51,18 +70,30 @@ class ConfigUpdateRequest(BaseModel):
     default_quality: Optional[str] = None
 
 def check_ffmpeg():
+    # 1. Pasta do executável ou subpasta bin
+    for candidate in [os.path.join(APP_DIR, "ffmpeg.exe"), os.path.join(APP_DIR, "bin", "ffmpeg.exe"), os.path.join(BASE_DIR, "ffmpeg.exe")]:
+        if os.path.exists(candidate):
+            return {"installed": True, "path": candidate}
+    # 2. PATH do sistema
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path:
         return {"installed": True, "path": ffmpeg_path}
+    # 3. ~/.spotdl/ffmpeg.exe
     alt_path = os.path.expanduser("~/.spotdl/ffmpeg.exe")
     if os.path.exists(alt_path):
         return {"installed": True, "path": alt_path}
     return {"installed": False, "path": None}
 
 def check_deno():
+    # 1. Pasta do executável ou subpasta bin
+    for candidate in [os.path.join(APP_DIR, "deno.exe"), os.path.join(APP_DIR, "bin", "deno.exe"), os.path.join(BASE_DIR, "deno.exe")]:
+        if os.path.exists(candidate):
+            return {"installed": True, "path": candidate}
+    # 2. PATH do sistema
     deno_path = shutil.which("deno")
     if deno_path:
         return {"installed": True, "path": deno_path}
+    # 3. ~/.spotdl/deno.exe
     alt_path = os.path.expanduser("~/.spotdl/deno.exe")
     if os.path.exists(alt_path):
         return {"installed": True, "path": alt_path}
@@ -72,7 +103,11 @@ def ensure_deno_installed():
     if not check_deno()["installed"]:
         try:
             print("[Downfy] Baixando Deno para decifrar áudios do Spotify...")
-            subprocess.run([sys.executable, "-m", "spotdl", "--download-deno"], capture_output=True, text=True)
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "__spotdl_cli__", "--download-deno"]
+            else:
+                cmd = [sys.executable, "-m", "spotdl", "--download-deno"]
+            subprocess.run(cmd, capture_output=True, text=True)
             print("[Downfy] Deno baixado com sucesso.")
         except Exception as e:
             print("[Downfy] Erro ao baixar Deno:", e)
@@ -197,6 +232,8 @@ def open_folder():
 
 @app.post("/api/update-ytdlp")
 async def update_ytdlp():
+    if getattr(sys, 'frozen', False):
+        return {"status": "success", "message": "Downfy já opera com a versão integrada do motor de download."}
     try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp",
@@ -215,16 +252,20 @@ async def update_ytdlp():
 @app.post("/api/install-ffmpeg")
 async def install_ffmpeg():
     try:
+        if getattr(sys, 'frozen', False):
+            cmd = [sys.executable, "__spotdl_cli__", "--download-ffmpeg"]
+        else:
+            cmd = [sys.executable, "-m", "spotdl", "--download-ffmpeg"]
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "spotdl", "--download-ffmpeg",
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT
         )
         stdout, _ = await proc.communicate()
         output = stdout.decode('utf-8', errors='ignore')
         
-        if os.path.exists(spotdl_dir) and spotdl_dir not in os.environ["PATH"]:
-            os.environ["PATH"] = spotdl_dir + os.pathsep + os.environ["PATH"]
+        if os.path.exists(spotdl_dir) and spotdl_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = spotdl_dir + os.pathsep + os.environ.get("PATH", "")
             
         ffmpeg_info = check_ffmpeg()
         if ffmpeg_info["installed"]:
@@ -386,15 +427,26 @@ async def download_spotify(url, dl_id, fmt, quality):
     bitrate = quality if quality.endswith("k") else f"{quality}k"
     output_pattern = os.path.join(config["download_folder"], "{artist} - {title}.{ext}")
 
-    cmd = [
-        sys.executable, "-m", "spotdl", "download", url,
-        "--output", output_pattern,
-        "--bitrate", bitrate,
-        "--format", fmt,
-        "--threads", "4",
-        "--max-retries", "3",
-        "--print-errors"
-    ]
+    if getattr(sys, 'frozen', False):
+        cmd = [
+            sys.executable, "__spotdl_cli__", "download", url,
+            "--output", output_pattern,
+            "--bitrate", bitrate,
+            "--format", fmt,
+            "--threads", "4",
+            "--max-retries", "3",
+            "--print-errors"
+        ]
+    else:
+        cmd = [
+            sys.executable, "-m", "spotdl", "download", url,
+            "--output", output_pattern,
+            "--bitrate", bitrate,
+            "--format", fmt,
+            "--threads", "4",
+            "--max-retries", "3",
+            "--print-errors"
+        ]
 
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
 
@@ -587,4 +639,36 @@ async def download_ytdlp(url, dl_id, fmt, quality):
             active_downloads[dl_id]["error"] = f"Falha no download: {err_msg}"
         active_downloads[dl_id]["status_text"] = "Erro no processo de download."
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+frontend_dir = os.path.join(BASE_DIR, "frontend")
+if not os.path.exists(frontend_dir):
+    frontend_dir = os.path.join(APP_DIR, "frontend")
+if not os.path.exists(frontend_dir):
+    frontend_dir = "frontend"
+
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+if __name__ == "__main__":
+    import uvicorn
+    import webbrowser
+    import threading
+
+    def open_browser():
+        import time
+        time.sleep(1.2)
+        try:
+            webbrowser.open("http://127.0.0.1:8000")
+        except Exception:
+            pass
+
+    threading.Thread(target=open_browser, daemon=True).start()
+
+    print("=" * 65)
+    print("   🎧  DOWNFY - DOWNLOADER PROFISSIONAL PARA DJS  🎧")
+    print("=" * 65)
+    print("   -> Servidor ativo em: http://127.0.0.1:8000")
+    print("   -> O seu navegador sera aberto automaticamente em instantes...")
+    print("   -> Para encerrar o Downfy, basta fechar esta janela.")
+    print("=" * 65)
+    print()
+
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
