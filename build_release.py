@@ -45,6 +45,8 @@ def main():
             dest = output_dir / item.name
             if item.is_dir():
                 shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
         # Garantir pasta frontend também na raiz de Downfy_Portatil
         frontend_src = root_dir / "frontend"
         if frontend_src.exists():

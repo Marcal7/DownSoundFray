@@ -663,7 +663,7 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
 
     print("=" * 65)
-    print("   🎧  DOWNFY - DOWNLOADER PROFISSIONAL PARA DJS  🎧")
+    print("   [+] DOWNFY - DOWNLOADER PROFISSIONAL PARA DJS")
     print("=" * 65)
     print("   -> Servidor ativo em: http://127.0.0.1:8000")
     print("   -> O seu navegador sera aberto automaticamente em instantes...")
